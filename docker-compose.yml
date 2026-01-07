@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  teslamate-fixer:
+    build: .
+    container_name: teslamate-address-fixer
+    restart: unless-stopped
+    environment:
+      # 数据库配置
+      - DB_HOST=database  # 在Docker网络中连接到Teslamate的数据库服务
+      - DB_PORT=5432
+      - DB_NAME=teslamate
+      - DB_USER=teslamate
+      - DB_PASS=${TESLAMATE_DB_PASSWORD:-teslamate}  # 从环境变量读取密码
+
+      # 百度地图API配置
+      - BAIDU_AK=${BAIDU_MAP_AK}  # 必须设置
+      - BAIDU_SK=${BAIDU_MAP_SK}  # 必须设置
+
+      # 修复配置
+      - DAYS_TO_FIX=7             # 修复最近7天的数据
+      - BATCH_SIZE=2              # 批量提交大小
+      - LIMIT_PER_RUN=            # 每次运行修复的最大数量（空表示无限制）
+      - API_DELAY=1.0             # API调用延迟（秒）
+      - LOG_LEVEL=INFO            # 日志级别
+
+      # 定时任务配置
+      - CRON_SCHEDULE=0 2 * * *   # 每天凌晨2点运行
+      - RUN_ON_STARTUP=true       # 启动时立即运行一次
+
+      # 时区设置
+      - TZ=Asia/Shanghai
+    volumes:
+      # 挂载日志目录
+      - ./logs:/var/log/teslamate
+
+      # 如果要连接到宿主机的PostgreSQL，可以挂载socket
+      # - /var/run/postgresql:/var/run/postgresql
+
+    networks:
+      - teslamate  # 连接到Teslamate的网络
+
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "pgrep", "cron"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  teslamate:
+    external: true  # 使用外部网络（需要先创建）

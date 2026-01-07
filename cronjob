@@ -1,0 +1,13 @@
+# Teslamate地址修复定时任务
+# 格式: 分钟 小时 日 月 周 用户 命令
+
+# 每天凌晨2点运行
+0 2 * * * teslamate cd /app && python3 teslamate_fixer.py >> /var/log/teslamate/fixer.log 2>&1
+
+# 如果需要每小时运行一次（测试用）
+# 0 * * * * teslamate cd /app && python3 teslamate_fixer.py >> /var/log/teslamate/fixer.log 2>&1
+
+# 每30分钟运行一次
+# */30 * * * * teslamate cd /app && python3 teslamate_fixer.py >> /var/log/teslamate/fixer.log 2>&1
+
+# 注意：保持文件末尾的空行
