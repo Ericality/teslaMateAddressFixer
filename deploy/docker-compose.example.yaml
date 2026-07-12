@@ -1,0 +1,29 @@
+services:
+  teslamate-fixer:
+    build: .
+    container_name: teslamate-address-fixer
+    restart: unless-stopped
+    environment:
+      - DB_HOST=database
+      - DB_PORT=5432
+      - DB_NAME=teslamate
+      - DB_USER=teslamate
+      - DB_PASS=${TESLAMATE_DB_PASSWORD:-teslamate}
+      - BAIDU_AK=${BAIDU_MAP_AK}
+      - BAIDU_SK=${BAIDU_MAP_SK}
+      - DAYS_TO_FIX=7
+      - BATCH_SIZE=2
+      - LIMIT_PER_RUN=
+      - API_DELAY=1.0
+      - LOG_LEVEL=INFO
+      - CRON_SCHEDULE=0 2 * * *
+      - RUN_ON_STARTUP=true
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./logs:/var/log/teslamate
+    networks:
+      - teslamate
+
+networks:
+  teslamate:
+    external: true
