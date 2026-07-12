@@ -119,8 +119,12 @@ echo "所有检查通过，开始启动服务..."
 # 创建日志文件
 touch /var/log/teslamate/fixer.log
 
-# 显示cron配置
-echo "Cron任务配置:"
+# 动态生成 cron 配置（支持 CRON_SCHEDULE 环境变量）
+SCHEDULE="${CRON_SCHEDULE:-0 2 * * *}"
+echo "${SCHEDULE} cd /app && python3 teslamate_fixer.py >> /var/log/teslamate/fixer.log 2>&1" | crontab -
+
+# 显示 cron 配置
+echo "Cron 任务配置: ${SCHEDULE}"
 crontab -l
 echo ""
 
