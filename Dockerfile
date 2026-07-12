@@ -7,7 +7,7 @@ WORKDIR /app
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
     cron \
-    curl \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
 # 复制依赖文件
@@ -39,22 +39,16 @@ RUN useradd -m -u 1000 teslamate && \
 RUN touch /var/log/cron.log && \
     chown teslamate:teslamate /var/log/cron.log
 
-# 应用cron job（需要在root下为teslamate用户设置crontab）
-RUN crontab -u teslamate /etc/cron.d/teslamate-fixer-cron
-
-# 切换到非root用户
-USER teslamate
+# 应用cron job（cron 需要 root 运行，不切换用户）
+RUN crontab /etc/cron.d/teslamate-fixer-cron
 
 # 设置环境变量
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-# 健康检查
+# 健康检查（cron 进程存活即健康）
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost/ || exit 1
-
-# 暴露端口（如果需要）
-# EXPOSE 8000
+    CMD pgrep cron > /dev/null || exit 1
 
 # 设置容器启动命令
 CMD ["./start.sh"]
