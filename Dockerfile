@@ -35,6 +35,13 @@ RUN mkdir -p /var/log/teslamate
 RUN useradd -m -u 1000 teslamate && \
     chown -R teslamate:teslamate /app /var/log/teslamate
 
+# 设置cron日志（在切换到非root用户之前创建并赋权）
+RUN touch /var/log/cron.log && \
+    chown teslamate:teslamate /var/log/cron.log
+
+# 应用cron job（需要在root下为teslamate用户设置crontab）
+RUN crontab -u teslamate /etc/cron.d/teslamate-fixer-cron
+
 # 切换到非root用户
 USER teslamate
 
@@ -45,12 +52,6 @@ ENV PYTHONUNBUFFERED=1
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost/ || exit 1
-
-# 设置cron日志
-RUN touch /var/log/cron.log
-
-# 应用cron job
-RUN crontab /etc/cron.d/teslamate-fixer-cron
 
 # 暴露端口（如果需要）
 # EXPOSE 8000

@@ -53,12 +53,21 @@ def setup_logging(log_level='INFO'):
     """设置日志配置"""
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 
+    default_log = '/var/log/teslamate/fixer.log'
+    log_file = os.getenv('LOG_FILE', default_log)
+    try:
+        file_handler = logging.FileHandler(log_file)
+    except (PermissionError, FileNotFoundError):
+        # Docker 外的本地环境可能无权限写入 /var/log，回退到当前目录
+        file_handler = logging.FileHandler('teslamate-fixer.log')
+        print(f"警告: 无法写入 {log_file}，将日志写入当前目录")
+
     logging.basicConfig(
         level=getattr(logging, log_level),
         format=log_format,
         handlers=[
             logging.StreamHandler(sys.stdout),
-            logging.FileHandler('/var/log/teslamate-fixer.log')
+            file_handler
         ]
     )
 
@@ -178,8 +187,8 @@ class BaiduGeocoder:
                     'street_number': address_component.get('street_number', ''),
                     'country': address_component.get('country', '中国'),
                     'country_code': 'cn',
-                    'latitude': lat,
-                    'longitude': lng,
+                    'latitude': float(lat),
+                    'longitude': float(lng),
                     'nearby_poi': nearby_poi,
                     'poi_count': len(pois),
                 }
@@ -332,7 +341,7 @@ class DatabaseManager:
             address_info.get('province', ''),
             address_info.get('district', ''),
             address_info.get('country', '中国'),
-            json.dumps(address_info, ensure_ascii=False),
+            json.dumps(address_info, ensure_ascii=False, default=str),
             coord_hash,
             ''
         )
