@@ -3,7 +3,9 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/ericality/teslamate-fixer)](https://hub.docker.com/r/ericality/teslamate-fixer)
 [![Platforms](https://img.shields.io/badge/platform-linux%2Famd64%20%7C%20linux%2Farm64-blue)](https://hub.docker.com/r/ericality/teslamate-fixer/tags)
 
-A cron-based Docker service that automatically fills in missing Chinese addresses in [TeslaMate](https://github.com/teslamate-org/teslamate) driving records using the Baidu Maps reverse geocoding API .
+**English** | [中文](README.zh-CN.md)
+
+A cron-based Docker service that automatically fills in missing Chinese addresses in [TeslaMate](https://github.com/teslamate-org/teslamate) driving records using the Baidu Maps reverse geocoding API.
 
 ## Features
 
