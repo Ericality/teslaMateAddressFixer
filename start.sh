@@ -127,19 +127,20 @@ echo "所有检查通过，开始启动服务..."
 LOG_FILE="/var/log/teslamate/fixer.log"
 touch "$LOG_FILE"
 
-# 动态生成 cron 配置（支持 CRON_SCHEDULE 环境变量）
-# 将环境变量以 KEY=VALUE 格式直接写入 crontab 头部（不要用 export，cron 不认识）
-# 从 PID 1 的环境表读取，确保捕获容器所有环境变量
+# 将 PID 1 的环境表 dump 为纯文本文件（每行 KEY=VALUE，无 export）
+# cron 命令通过 env -i 清空环境后逐条加载，根除环境变量继承问题
+tr '\0' '\n' < /proc/1/environ | grep -vE '^_=|^SHLVL=|^PWD=|^OLDPWD=|^HOME=|^TERM=|^SHELL=|^USER=|^LOGNAME=|^HOSTNAME=' > /app/container.env
+echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin" >> /app/container.env
+
+# 动态生成 cron 配置
 SCHEDULE="${CRON_SCHEDULE:-0 2 * * *}"
-{
-    echo 'SHELL=/bin/bash'
-    echo 'PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin'
-    cat /proc/1/environ | tr '\0' '\n' | grep -vE '^_|^SHLVL=|^PWD=|^OLDPWD=|^HOME=|^TERM=|^SHELL=|^PATH=|^USER=|^LOGNAME='
-    echo "${SCHEDULE} cd /app && python3 teslamate_fixer.py >> ${LOG_FILE} 2>&1"
-} | crontab -
+echo "${SCHEDULE} env -i \$(cat /app/container.env) /usr/local/bin/python3 /app/teslamate_fixer.py >> ${LOG_FILE} 2>&1" | crontab -
 
 # 显示 cron 配置
 echo "Cron 任务配置: ${SCHEDULE}"
+echo "环境变量文件:"
+cat /app/container.env
+echo ""
 crontab -l
 echo ""
 
