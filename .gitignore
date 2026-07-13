@@ -14,4 +14,4 @@ __pycache__/
 .venv/
 
 # Docker
-*.tar
+*.tar*.tar.gz
