@@ -12,6 +12,12 @@ if [ -z "$BAIDU_AK" ] || [ -z "$BAIDU_SK" ]; then
     exit 1
 fi
 
+# 配置时区
+if [ -n "$TZ" ]; then
+    ln -sf "/usr/share/zoneinfo/$TZ" /etc/localtime 2>/dev/null || true
+    echo "$TZ" > /etc/timezone 2>/dev/null || true
+fi
+
 # 显示配置信息（不显示敏感信息）
 echo "配置信息："
 echo "DB_HOST: $DB_HOST"
@@ -22,6 +28,7 @@ echo "DAYS_TO_FIX: ${DAYS_TO_FIX:-7}"
 echo "BATCH_SIZE: ${BATCH_SIZE:-2}"
 echo "LOG_LEVEL: ${LOG_LEVEL:-INFO}"
 echo "CRON_SCHEDULE: ${CRON_SCHEDULE:-0 2 * * *}"
+echo "TZ: ${TZ:-UTC}"
 echo ""
 
 # 测试数据库连接
@@ -117,11 +124,16 @@ echo ""
 echo "所有检查通过，开始启动服务..."
 
 # 创建日志文件
-touch /var/log/teslamate/fixer.log
+LOG_FILE="/var/log/teslamate/fixer.log"
+touch "$LOG_FILE"
+
+# 导出所有环境变量到文件，供 cron 子进程 source
+printenv > /app/cron_env.sh
+chmod 644 /app/cron_env.sh
 
 # 动态生成 cron 配置（支持 CRON_SCHEDULE 环境变量）
 SCHEDULE="${CRON_SCHEDULE:-0 2 * * *}"
-echo "${SCHEDULE} cd /app && python3 teslamate_fixer.py >> /var/log/teslamate/fixer.log 2>&1" | crontab -
+echo "${SCHEDULE} . /app/cron_env.sh; cd /app && python3 teslamate_fixer.py >> ${LOG_FILE} 2>&1" | crontab -
 
 # 显示 cron 配置
 echo "Cron 任务配置: ${SCHEDULE}"
@@ -139,4 +151,7 @@ echo ""
 echo "启动cron服务..."
 
 # 启动cron并保持容器运行
-exec cron -f
+cron -f &
+
+# tail 日志输出到容器终端，方便 docker logs 查看
+tail -f "$LOG_FILE"
