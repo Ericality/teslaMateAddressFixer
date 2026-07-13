@@ -134,7 +134,7 @@ SCHEDULE="${CRON_SCHEDULE:-0 2 * * *}"
 {
     echo 'SHELL=/bin/bash'
     echo 'PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin'
-    grep -v '^_\|^SHLVL=\|^PWD=\|^OLDPWD=\|^HOME=\|^TERM=\|^SHELL=\|^PATH=\|^USER=\|^LOGNAME=' /proc/1/environ | tr '\0' '\n'
+    cat /proc/1/environ | tr '\0' '\n' | grep -vE '^_|^SHLVL=|^PWD=|^OLDPWD=|^HOME=|^TERM=|^SHELL=|^PATH=|^USER=|^LOGNAME='
     echo "${SCHEDULE} cd /app && python3 teslamate_fixer.py >> ${LOG_FILE} 2>&1"
 } | crontab -
 
