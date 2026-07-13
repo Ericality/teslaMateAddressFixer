@@ -1,161 +1,83 @@
 #!/bin/bash
 
-# 启动脚本
-
 echo "=========================================="
 echo "Teslamate地址修复工具 - Docker容器启动"
 echo "=========================================="
 
-# 检查必需的环境变量
-if [ -z "$BAIDU_AK" ] || [ -z "$BAIDU_SK" ]; then
+[ -z "$BAIDU_AK" ] || [ -z "$BAIDU_SK" ] && {
     echo "错误：必须设置BAIDU_AK和BAIDU_SK环境变量"
     exit 1
-fi
+}
 
-# 配置时区
-if [ -n "$TZ" ]; then
+[ -n "$TZ" ] && {
     ln -sf "/usr/share/zoneinfo/$TZ" /etc/localtime 2>/dev/null || true
     echo "$TZ" > /etc/timezone 2>/dev/null || true
-fi
+}
 
-# 显示配置信息（不显示敏感信息）
 echo "配置信息："
-echo "DB_HOST: $DB_HOST"
-echo "DB_PORT: $DB_PORT"
-echo "DB_NAME: $DB_NAME"
-echo "DB_USER: $DB_USER"
-echo "DAYS_TO_FIX: ${DAYS_TO_FIX:-7}"
-echo "BATCH_SIZE: ${BATCH_SIZE:-2}"
-echo "LOG_LEVEL: ${LOG_LEVEL:-INFO}"
-echo "CRON_SCHEDULE: ${CRON_SCHEDULE:-0 2 * * *}"
-echo "TZ: ${TZ:-UTC}"
+echo "DB_HOST: $DB_HOST  DB_PORT: $DB_PORT  DB_NAME: $DB_NAME"
+echo "DAYS_TO_FIX: ${DAYS_TO_FIX:-7}  BATCH_SIZE: ${BATCH_SIZE:-2}"
+echo "CRON_SCHEDULE: ${CRON_SCHEDULE:-0 2 * * *}  TZ: ${TZ:-UTC}"
 echo ""
 
-# 测试数据库连接
 echo "测试数据库连接..."
 python3 -c "
 import psycopg2
 try:
-    conn = psycopg2.connect(
-        host='$DB_HOST',
-        port=$DB_PORT,
-        database='$DB_NAME',
-        user='$DB_USER',
-        password='$DB_PASS'
-    )
-    print('✅ 数据库连接成功')
-    conn.close()
+    conn = psycopg2.connect(host='$DB_HOST',port=$DB_PORT,database='$DB_NAME',user='$DB_USER',password='$DB_PASS')
+    print('✅ 数据库连接成功'); conn.close()
 except Exception as e:
-    print(f'❌ 数据库连接失败: {e}')
-    exit(1)
-"
+    print(f'❌ 数据库连接失败: {e}'); exit(1)
+" || exit 1
 
-if [ $? -ne 0 ]; then
-    exit 1
-fi
-
-# 测试百度API连接
 echo "测试百度API连接..."
 python3 -c "
-import requests
-import hashlib
-import urllib.parse
-import json
-
-ak = '$BAIDU_AK'
-sk = '$BAIDU_SK'
-
-# 测试坐标
-lat, lng = 31.2304, 121.4737
-
-# 构建参数
-params = {
-    'ak': ak,
-    'location': f'{lat},{lng}',
-    'output': 'json',
-    'coordtype': 'wgs84ll',
-}
-
-# 生成SN
-query_parts = []
-for key, value in params.items():
-    query_parts.append(f'{key}={value}')
-
-query_str = '&'.join(query_parts)
-full_query_str = f'/reverse_geocoding/v3/?{query_str}'
-encoded_str = urllib.parse.quote(full_query_str, safe=\"/:=&?#+!$,;'@()*[]\")
-raw_str = encoded_str + sk
-final_str = urllib.parse.quote_plus(raw_str)
-sn = hashlib.md5(final_str.encode()).hexdigest()
-
-params['sn'] = sn
-
-# 构建URL
-query_parts = []
-for key, value in params.items():
-    if key == 'location':
-        query_parts.append(f'{key}={value}')
-    else:
-        query_parts.append(f'{key}={value}')
-
-query_str = '&'.join(query_parts)
-url = f'http://api.map.baidu.com/reverse_geocoding/v3/?{query_str}'
-
+import requests,hashlib,urllib.parse
 try:
-    response = requests.get(url, timeout=10, verify=False)
-    data = response.json()
+    p={'ak':'$BAIDU_AK','location':'31.2304,121.4737','output':'json','coordtype':'wgs84ll'}
+    q='&'.join(f'{k}={v}' for k,v in p.items())
+    s=urllib.parse.quote(f'/reverse_geocoding/v3/?{q}',safe=\"/:=&?#+!$,;'@()*[]\")+'$BAIDU_SK'
+    p['sn']=hashlib.md5(urllib.parse.quote_plus(s).encode()).hexdigest()
+    r=requests.get('http://api.map.baidu.com/reverse_geocoding/v3/?'+'&'.join(f'{k}={v}' for k,v in p.items()),timeout=10,verify=False)
+    if r.json().get('status')==0: print('✅ 百度API连接成功')
+    else: print(f\"❌ 百度API错误: {r.json().get('message')}\"); exit(1)
+except Exception as e: print(f'❌ 百度API连接失败: {e}'); exit(1)
+" || exit 1
 
-    if data.get('status') == 0:
-        address = data.get('result', {}).get('formatted_address', '')
-        print(f'✅ 百度API连接成功: {address}')
-    else:
-        print(f'❌ 百度API错误: {data.get(\"message\")}')
-        exit(1)
-except Exception as e:
-    print(f'❌ 百度API连接失败: {e}')
-    exit(1)
-"
+echo ""; echo "所有检查通过，开始启动服务..."
 
-if [ $? -ne 0 ]; then
-    exit 1
-fi
-
-echo ""
-echo "所有检查通过，开始启动服务..."
-
-# 创建日志文件
 LOG_FILE="/var/log/teslamate/fixer.log"
 touch "$LOG_FILE"
 
-# 将 PID 1 的环境表 dump 为纯文本文件（每行 KEY=VALUE，无 export）
-# cron 命令通过 env -i 清空环境后逐条加载，根除环境变量继承问题
-tr '\0' '\n' < /proc/1/environ | grep -vE '^_=|^SHLVL=|^PWD=|^OLDPWD=|^HOME=|^TERM=|^SHELL=|^USER=|^LOGNAME=|^HOSTNAME=' > /app/container.env
-echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin" >> /app/container.env
+# 通过 env 命令生成 export 文件，shell 可直接 source
+env | while IFS='=' read -r name value; do
+    printf "export %s='%s'\n" "$name" "$value"
+done > /app/container.env
+chmod 644 /app/container.env
 
-# 动态生成 cron 配置
+# 创建 cron 执行的 wrapper 脚本
+cat > /app/cron_job.sh << 'WRAPPER_EOF'
+#!/bin/bash
+set -a
+source /app/container.env
+set +a
+exec /usr/local/bin/python3 /app/teslamate_fixer.py
+WRAPPER_EOF
+chmod +x /app/cron_job.sh
+
 SCHEDULE="${CRON_SCHEDULE:-0 2 * * *}"
-echo "${SCHEDULE} env -i \$(cat /app/container.env) /usr/local/bin/python3 /app/teslamate_fixer.py >> ${LOG_FILE} 2>&1" | crontab -
+echo "${SCHEDULE} /bin/bash /app/cron_job.sh >> ${LOG_FILE} 2>&1" | crontab -
 
-# 显示 cron 配置
-echo "Cron 任务配置: ${SCHEDULE}"
-echo "环境变量文件:"
-cat /app/container.env
-echo ""
+echo "Cron 任务: ${SCHEDULE}"
 crontab -l
 echo ""
 
-# 立即运行一次修复（可选）
-if [ "$RUN_ON_STARTUP" = "true" ]; then
+[ "$RUN_ON_STARTUP" = "true" ] && {
     echo "立即运行一次修复..."
     python3 /app/teslamate_fixer.py
     echo "立即修复完成"
-fi
+}
 
-echo ""
 echo "启动cron服务..."
-
-# 启动cron并保持容器运行
 cron -f &
-
-# tail 日志输出到容器终端，方便 docker logs 查看
 tail -f "$LOG_FILE"
