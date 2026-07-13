@@ -127,16 +127,16 @@ echo "所有检查通过，开始启动服务..."
 LOG_FILE="/var/log/teslamate/fixer.log"
 touch "$LOG_FILE"
 
-# 导出所有环境变量到文件，供 cron 子进程 source（cron 默认 PATH 不含 /usr/local/bin）
-{
-    echo "export PATH=/usr/local/bin:/usr/bin:/bin"
-    printenv
-} > /app/cron_env.sh
-chmod 644 /app/cron_env.sh
-
 # 动态生成 cron 配置（支持 CRON_SCHEDULE 环境变量）
+# 将环境变量直接写入 crontab 头部，cron 原生支持此格式，无需额外 source
+# 跳过只读变量和可能引起问题的变量
 SCHEDULE="${CRON_SCHEDULE:-0 2 * * *}"
-echo "${SCHEDULE} . /app/cron_env.sh; cd /app && python3 teslamate_fixer.py >> ${LOG_FILE} 2>&1" | crontab -
+{
+    echo "SHELL=/bin/bash"
+    echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin"
+    grep -v '^_\|^SHLVL=\|^PWD=\|^OLDPWD=\|^HOME=\|^TERM=\|^SHELL=\|^PATH=\|^USER=\|^LOGNAME=' /proc/1/environ | tr '\0' '\n' | sed 's/^/export /'
+    echo "${SCHEDULE} cd /app && python3 teslamate_fixer.py >> ${LOG_FILE} 2>&1"
+} | crontab -
 
 # 显示 cron 配置
 echo "Cron 任务配置: ${SCHEDULE}"
