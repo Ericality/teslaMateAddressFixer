@@ -128,13 +128,13 @@ LOG_FILE="/var/log/teslamate/fixer.log"
 touch "$LOG_FILE"
 
 # 动态生成 cron 配置（支持 CRON_SCHEDULE 环境变量）
-# 将环境变量直接写入 crontab 头部，cron 原生支持此格式，无需额外 source
-# 跳过只读变量和可能引起问题的变量
+# 将环境变量以 KEY=VALUE 格式直接写入 crontab 头部（不要用 export，cron 不认识）
+# 从 PID 1 的环境表读取，确保捕获容器所有环境变量
 SCHEDULE="${CRON_SCHEDULE:-0 2 * * *}"
 {
-    echo "SHELL=/bin/bash"
-    echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin"
-    grep -v '^_\|^SHLVL=\|^PWD=\|^OLDPWD=\|^HOME=\|^TERM=\|^SHELL=\|^PATH=\|^USER=\|^LOGNAME=' /proc/1/environ | tr '\0' '\n' | sed 's/^/export /'
+    echo 'SHELL=/bin/bash'
+    echo 'PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin'
+    grep -v '^_\|^SHLVL=\|^PWD=\|^OLDPWD=\|^HOME=\|^TERM=\|^SHELL=\|^PATH=\|^USER=\|^LOGNAME=' /proc/1/environ | tr '\0' '\n'
     echo "${SCHEDULE} cd /app && python3 teslamate_fixer.py >> ${LOG_FILE} 2>&1"
 } | crontab -
 
